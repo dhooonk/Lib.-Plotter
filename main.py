@@ -98,9 +98,14 @@ def _scrollable_text(parent, height=6):
 # ══════════════════════════════════════════════════════════════════
 
 class _CurveTab(tk.Frame):
-    """Transfer/Output 탭의 공통 레이아웃."""
+    """
+    Transfer Curve 및 Output Curve 탭에서 공통으로 사용되는 UI 레이아웃 컨테이너입니다.
+    좌측에는 데이터 선택, 옵션 제어, 저장 경로 등을 입력하는 컨트롤 패널을 가지며,
+    우측에는 Matplotlib 결과물이 렌더링되는 차트 캔버스를 가집니다.
+    공통된 기능을 상속(Inheritance)받기 위한 기반 클래스(Base class)입니다.
+    """
 
-    MODE_LABEL   = ""   # 서브클래스에서 오버라이드
+    MODE_LABEL   = ""   # 탭 제목 라벨 (서브클래스에서 오버라이드)
     PARAM_LABEL  = ""   # "Vd" or "Vg"
     X_LABEL      = ""   # "Vg" or "Vd"
     DEFAULT_LOG  = True
@@ -340,18 +345,31 @@ class _CurveTab(tk.Frame):
             self._draw_chart()
 
     def _run_analysis(self):
+        """
+        '분석 실행' 버튼 클릭 이벤트 핸들러입니다.
+        데이터 파싱 및 차트 렌더링 시 응용 프로그램 UI가 멈추는(Freezing) 현상을
+        효과적으로 방지하기 위해 분석 태스크를 별도 스레드(Thread)로 넘깁니다.
+        """
         if not self._filepath:
             messagebox.showwarning("파일 없음", "메인 데이터 파일을 먼저 선택해주세요.")
             return
         self._log("분석 시작...")
         self._status_var.set("⏳ 데이터 파싱 중...")
-        # 별도 스레드에서 실행 (UI 블로킹 방지)
+        # 별도 데몬 스레드에서 백그라운드 작업 수행
         threading.Thread(target=self._analysis_thread, daemon=True).start()
 
     def _analysis_thread(self):
+        """
+        분석 스레드의 핵심 로직입니다.
+        데이터 파서(Parser)를 호출하여 엑셀/CSV 모델 데이터를 읽어들이고,
+        비교 대상 파일(Reference)이 존재할 경우 동시에 로드한 뒤,
+        Tkinter의 UI 메인 루프에 안전하게 통신(self.after 활용)하여 차트를 생성합니다.
+        """
         try:
+            # 1. 메인 파일 파싱
             self._grouped = self._parse_data(self._filepath)
             
+            # 2. 비교 대상(Reference) 파일 파싱
             if self._ref_filepath:
                 self._ref_grouped = self._parse_data(self._ref_filepath)
             else:
